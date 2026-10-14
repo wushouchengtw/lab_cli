@@ -5,6 +5,7 @@ go 1.26.4
 require (
 	go.chromium.org/infra v0.0.0-20261008023758-3e765b79e1d7
 	google.golang.org/api v0.301.0
+	google.golang.org/genproto v0.0.0-20261005182115-fad411399dd8
 )
 
 require (
@@ -34,7 +35,6 @@ require (
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
-	google.golang.org/genproto v0.0.0-20261005182115-fad411399dd8 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260928230214-8a89bd6388cc // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260928230214-8a89bd6388cc // indirect
 	google.golang.org/grpc v1.84.0 // indirect
