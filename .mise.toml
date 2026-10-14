@@ -1,0 +1,53 @@
+# ==============================================================================
+# .mise.toml - Development Environment Configuration for lab_cli
+# ==============================================================================
+
+[tools]
+# Matches the Go version defined in go.mod
+go = "1.26.4"
+
+# Go Language Server (LSP) for VS Code / Cursor / Neovim auto-completion & code navigation
+"go:golang.org/x/tools/gopls" = "latest"
+
+# Industry standard Go linter and static code analysis
+golangci-lint = "latest"
+
+[env]
+# CGO_ENABLED = "0": Disables cgo to produce 100% statically linked pure Go binaries.
+# Eliminates dynamic C runtime dependencies (e.g. glibc), enabling execution on minimal
+# environments (Alpine, scratch containers) and simplifying cross-compilation without a C toolchain.
+CGO_ENABLED = "0"
+
+# GO111MODULE = "on": Forces Go to use Go Modules (go.mod) for dependency resolution,
+# completely bypassing legacy $GOPATH/src lookup behavior across all CI/build environments.
+GO111MODULE = "on"
+
+# ------------------------------------------------------------------------------
+# Project Task Runner (Run via `mise run <task>`)
+# ------------------------------------------------------------------------------
+[tasks.build]
+# -ldflags='-s -w':
+#   -s (strip symbol table): Removes symbol table to hinder reverse engineering.
+#   -w (strip DWARF debug info): Strips debug info to reduce binary size by ~30%-50% (recommended for production releases).
+description = "Compile optimized release binary to bin/lab_cli (stripped -s -w)"
+run = "go build -ldflags='-s -w' -o bin/lab_cli main.go"
+
+[tasks."build:dev"]
+description = "Compile development binary with full debug symbols (for Delve/IDE debugging)"
+run = "go build -o bin/lab_cli main.go"
+
+[tasks.run]
+description = "Run lab_cli in development mode"
+run = "go run main.go"
+
+[tasks.test]
+description = "Execute unit test suites"
+run = "go test -v ./..."
+
+[tasks.lint]
+description = "Run code analysis with golangci-lint"
+run = "golangci-lint run"
+
+[tasks.tidy]
+description = "Tidy and verify go.mod / go.sum dependencies"
+run = "go mod tidy"
