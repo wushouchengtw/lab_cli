@@ -8,38 +8,21 @@ import (
 
 	"lab_cli/service"
 
-	"google.golang.org/api/iterator"
 	moblabapipb "google.golang.org/genproto/googleapis/chromeos/moblab/v1beta1"
 )
 
-// mockModelIterator mocks the Google API iterator behavior.
-type mockModelIterator struct {
-	items []*moblabapipb.Model
-	err   error
-	index int
-}
-
-func (m *mockModelIterator) Next() (*moblabapipb.Model, error) {
-	if m.err != nil {
-		return nil, m.err
-	}
-	if m.index >= len(m.items) {
-		return nil, iterator.Done
-	}
-	item := m.items[m.index]
-	m.index++
-	return item, nil
-}
-
-// mockMoblabClient mocks the client and captures the request for assertion.
+// mockMoblabClient directly mocks the model slice returned from client.
 type mockMoblabClient struct {
-	iter        service.IModelIterator
-	capturedReq *moblabapipb.ListModelsRequest
+	models           []*moblabapipb.Model
+	err              error
+	capturedParent   string
+	capturedPageSize int32
 }
 
-func (m *mockMoblabClient) ListModels(ctx context.Context, req *moblabapipb.ListModelsRequest) service.IModelIterator {
-	m.capturedReq = req
-	return m.iter
+func (m *mockMoblabClient) ListModels(ctx context.Context, parent string, pageSize int32) ([]*moblabapipb.Model, error) {
+	m.capturedParent = parent
+	m.capturedPageSize = pageSize
+	return m.models, m.err
 }
 
 func TestParseBuildTargetsPath(t *testing.T) {
@@ -59,7 +42,7 @@ func TestBuildServiceImpl_ListModels(t *testing.T) {
 			{Name: "buildTargets/volteer/models/model-b"},
 		}
 		mockClient := &mockMoblabClient{
-			iter: &mockModelIterator{items: fakeModels},
+			models: fakeModels,
 		}
 
 		svc := service.NewWithClient(mockClient)
@@ -69,18 +52,15 @@ func TestBuildServiceImpl_ListModels(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		// Verify request parameters are properly constructed
-		if mockClient.capturedReq == nil {
-			t.Fatal("expected ListModelsRequest to be captured, got nil")
+		// Verify parameters forwarded to client
+		if mockClient.capturedParent != "buildTargets/volteer" {
+			t.Errorf("Parent = %q, want %q", mockClient.capturedParent, "buildTargets/volteer")
 		}
-		if mockClient.capturedReq.Parent != "buildTargets/volteer" {
-			t.Errorf("Parent = %q, want %q", mockClient.capturedReq.Parent, "buildTargets/volteer")
-		}
-		if mockClient.capturedReq.PageSize != 50 {
-			t.Errorf("PageSize = %d, want 50", mockClient.capturedReq.PageSize)
+		if mockClient.capturedPageSize != 50 {
+			t.Errorf("PageSize = %d, want 50", mockClient.capturedPageSize)
 		}
 
-		// Verify parsed results
+		// Verify transformed results
 		expected := []string{
 			"buildTargets/volteer/models/model-a",
 			"buildTargets/volteer/models/model-b",
@@ -92,7 +72,7 @@ func TestBuildServiceImpl_ListModels(t *testing.T) {
 
 	t.Run("returns empty slice without error when no models found", func(t *testing.T) {
 		mockClient := &mockMoblabClient{
-			iter: &mockModelIterator{items: []*moblabapipb.Model{}},
+			models: []*moblabapipb.Model{},
 		}
 
 		svc := service.NewWithClient(mockClient)
@@ -109,7 +89,7 @@ func TestBuildServiceImpl_ListModels(t *testing.T) {
 	t.Run("propagates error when underlying API returns an error", func(t *testing.T) {
 		expectedErr := errors.New("rpc network timeout")
 		mockClient := &mockMoblabClient{
-			iter: &mockModelIterator{err: expectedErr},
+			err: expectedErr,
 		}
 
 		svc := service.NewWithClient(mockClient)
