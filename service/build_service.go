@@ -6,18 +6,41 @@ import (
 	"lab_cli/site"
 
 	moblabapi "go.chromium.org/infra/cros/satlab/common/google.golang.org/google/chromeos/moblab"
+	"go.chromium.org/infra/cros/satlab/common/utils/collection"
 	"google.golang.org/api/option"
+	moblabapipb "google.golang.org/genproto/googleapis/chromeos/moblab/v1beta1"
 )
 
-type BuildServiceImpl struct {
-	// client the `BuildClient`
+// IMoblabClient defines the minimal interface for interacting with Moblab models.
+type IMoblabClient interface {
+	ListModels(ctx context.Context, parent string, pageSize int32) ([]*moblabapipb.Model, error)
+}
+
+// moblabClientAdapter encapsulates the Google SDK Iterator consumption.
+type moblabClientAdapter struct {
 	client *moblabapi.BuildClient
 }
 
-// New sets up the `BuildClient` and returns a BuildConnector.
-// The service account is set in the global environment.
-func New(ctx context.Context, serviceAccountPath ...string) (IBuildService, error) {
-	// create moblab client using service account json file
+func (a *moblabClientAdapter) ListModels(ctx context.Context, parent string, pageSize int32) ([]*moblabapipb.Model, error) {
+	req := &moblabapipb.ListModelsRequest{
+		Parent:   parent,
+		PageSize: pageSize,
+	}
+	iter := a.client.ListModels(ctx, req)
+	return collection.Collect(
+		iter.Next,
+		func(m *moblabapipb.Model) (*moblabapipb.Model, error) {
+			return m, nil
+		},
+	)
+}
+
+type BuildServiceImpl struct {
+	client IMoblabClient
+}
+
+// New sets up the BuildClient and returns a *BuildServiceImpl.
+func New(ctx context.Context, serviceAccountPath ...string) (*BuildServiceImpl, error) {
 	path := site.GetServiceAccountPath(serviceAccountPath...)
 	if path == "" {
 		return nil, fmt.Errorf("service account path is not set")
@@ -26,12 +49,12 @@ func New(ctx context.Context, serviceAccountPath ...string) (IBuildService, erro
 	if err != nil {
 		return nil, err
 	}
-	return &BuildServiceImpl{
-		client: client,
-	}, nil
+	return NewWithClient(&moblabClientAdapter{client: client}), nil
 }
 
-type IBuildService interface {
-	// ListModels returns all models by given board.
-	ListModels(ctx context.Context, board string, pageSize int) ([]string, error)
+// NewWithClient creates a *BuildServiceImpl with an injected IMoblabClient.
+func NewWithClient(client IMoblabClient) *BuildServiceImpl {
+	return &BuildServiceImpl{
+		client: client,
+	}
 }

@@ -3,9 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-
-	"go.chromium.org/infra/cros/satlab/common/utils/collection"
-	moblabapipb "google.golang.org/genproto/googleapis/chromeos/moblab/v1beta1"
 )
 
 func ParseBuildTargetsPath(board string) string {
@@ -17,22 +14,14 @@ func (b *BuildServiceImpl) ListModels(ctx context.Context, board string, pageSiz
 
 	parent := ParseBuildTargetsPath(board)
 
-	req := &moblabapipb.ListModelsRequest{
-		Parent:   parent,
-		PageSize: int32(pageSize),
-	}
-
-	iter := b.client.ListModels(ctx, req)
-
-	res, err := collection.Collect(
-		iter.Next,
-		func(model *moblabapipb.Model) (string, error) {
-			return model.GetName(), nil
-		},
-	)
-
+	models, err := b.client.ListModels(ctx, parent, int32(pageSize))
 	if err != nil {
 		return nil, err
+	}
+
+	res := make([]string, len(models))
+	for i, m := range models {
+		res[i] = m.GetName()
 	}
 
 	return res, nil
