@@ -25,11 +25,44 @@ func (m *mockMoblabClient) ListModels(ctx context.Context, parent string, pageSi
 	return m.models, m.err
 }
 
-func TestParseBuildTargetsPath(t *testing.T) {
+func TestParseBuildTargetsBoardPath(t *testing.T) {
 	got := service.ParseBuildTargetsBoardPath("volteer")
 	want := "buildTargets/volteer"
 	if got != want {
-		t.Errorf("ParseBuildTargetsPath() = %q, want %q", got, want)
+		t.Errorf("ParseBuildTargetsBoardPath() = %q, want %q", got, want)
+	}
+}
+
+func TestGetModelName(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "standard resource path",
+			input: "buildTargets/volteer/models/model-a",
+			want:  "model-a",
+		},
+		{
+			name:  "single model name",
+			input: "model-a",
+			want:  "model-a",
+		},
+		{
+			name:  "nested path",
+			input: "foo/bar/baz",
+			want:  "baz",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := service.GetModelName(tt.input)
+			if got != tt.want {
+				t.Errorf("GetModelName(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -103,6 +136,91 @@ func TestBuildServiceImpl_ListModels(t *testing.T) {
 		}
 		if results != nil {
 			t.Errorf("expected results to be nil on error, got %v", results)
+		}
+	})
+}
+
+func TestBuildServiceImpl_CheckPermission(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("returns true when model exists in list", func(t *testing.T) {
+		fakeModels := []*moblabapipb.Model{
+			{Name: "buildTargets/volteer/models/model-a"},
+			{Name: "buildTargets/volteer/models/model-b"},
+		}
+		mockClient := &mockMoblabClient{
+			models: fakeModels,
+		}
+
+		svc := service.NewWithClient(mockClient)
+		hasPermission, err := svc.CheckPermission(ctx, "volteer", "model-b", 100)
+
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !hasPermission {
+			t.Errorf("expected permission to be true, got false")
+		}
+		if mockClient.capturedParent != "buildTargets/volteer" {
+			t.Errorf("capturedParent = %q, want %q", mockClient.capturedParent, "buildTargets/volteer")
+		}
+		if mockClient.capturedPageSize != 100 {
+			t.Errorf("capturedPageSize = %d, want 100", mockClient.capturedPageSize)
+		}
+	})
+
+	t.Run("returns false when model is not in list", func(t *testing.T) {
+		fakeModels := []*moblabapipb.Model{
+			{Name: "buildTargets/volteer/models/model-a"},
+		}
+		mockClient := &mockMoblabClient{
+			models: fakeModels,
+		}
+
+		svc := service.NewWithClient(mockClient)
+		hasPermission, err := svc.CheckPermission(ctx, "volteer", "nonexistent-model", 100)
+
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if hasPermission {
+			t.Errorf("expected permission to be false, got true")
+		}
+	})
+
+	t.Run("returns false when model list is empty", func(t *testing.T) {
+		mockClient := &mockMoblabClient{
+			models: []*moblabapipb.Model{},
+		}
+
+		svc := service.NewWithClient(mockClient)
+		hasPermission, err := svc.CheckPermission(ctx, "volteer", "model-a", 100)
+
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if hasPermission {
+			t.Errorf("expected permission to be false, got true")
+		}
+	})
+
+	t.Run("returns error when list models fails", func(t *testing.T) {
+		expectedErr := errors.New("network failure")
+		mockClient := &mockMoblabClient{
+			err: expectedErr,
+		}
+
+		svc := service.NewWithClient(mockClient)
+		hasPermission, err := svc.CheckPermission(ctx, "volteer", "model-a", 100)
+
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !errors.Is(err, expectedErr) {
+			t.Errorf("error = %v, want %v", err, expectedErr)
+		}
+		if hasPermission {
+			t.Errorf("expected permission to be false on error, got true")
 		}
 	})
 }
