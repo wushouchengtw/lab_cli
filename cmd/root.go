@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 )
@@ -9,15 +10,37 @@ import (
 // DefaultTimeout is the default timeout duration for network and RPC calls.
 const DefaultTimeout = 20 * time.Second
 
+func setupLogger(verbose bool) {
+	level := slog.LevelWarn
+	if verbose {
+		level = slog.LevelDebug
+	}
+	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: level,
+	})
+	slog.SetDefault(slog.New(handler))
+}
+
 // Execute routes subcommands and handles global flags like -h/--help.
 func Execute(args []string) error {
-	if len(args) == 0 {
+	var verbose bool
+	var filteredArgs []string
+	for _, arg := range args {
+		if arg == "-v" || arg == "--verbose" {
+			verbose = true
+		} else {
+			filteredArgs = append(filteredArgs, arg)
+		}
+	}
+	setupLogger(verbose)
+
+	if len(filteredArgs) == 0 {
 		PrintUsage()
 		return fmt.Errorf("no command specified")
 	}
 
-	command := args[0]
-	subArgs := args[1:]
+	command := filteredArgs[0]
+	subArgs := filteredArgs[1:]
 
 	switch command {
 	case "list-models":
@@ -48,6 +71,10 @@ func PrintUsage() {
   list-models        List all models for a given board
   check-permission   Check access permission for a given board
 
+%s
+  -v, --verbose      Enable verbose/debug logging
+  -h, --help         Show help message
+
 Use "lab_cli <command> -h" for more information about a command.
-`, Header("Usage:"), Header("Available Commands:"))
+`, Header("Usage:"), Header("Available Commands:"), Header("Global Options:"))
 }

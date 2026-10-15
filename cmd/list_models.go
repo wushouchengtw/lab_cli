@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
 
@@ -69,7 +70,7 @@ func RunListModels(args []string) error {
 	}
 
 	if len(models) == 0 {
-		fmt.Printf("No models found for board %q.\n", opts.Board)
+		slog.Debug("No models found for board", "Board", opts.Board)
 		return nil
 	}
 
@@ -77,10 +78,10 @@ func RunListModels(args []string) error {
 		models = models[:opts.Limit]
 	}
 
-	fmt.Printf("\nFound %d model(s) for board %q:\n", len(models), opts.Board)
+	slog.Debug("Found model(s) for board", "Board", opts.Board, "Count", len(models))
 	for _, m := range models {
 		modelName := path.Base(m)
-		fmt.Printf("  - %s\n", modelName)
+		slog.Debug("Model", "ModelName", modelName)
 	}
 
 	return nil

@@ -26,7 +26,7 @@ func (m *mockMoblabClient) ListModels(ctx context.Context, parent string, pageSi
 }
 
 func TestParseBuildTargetsPath(t *testing.T) {
-	got := service.ParseBuildTargetsPath("volteer")
+	got := service.ParseBuildTargetsBoardPath("volteer")
 	want := "buildTargets/volteer"
 	if got != want {
 		t.Errorf("ParseBuildTargetsPath() = %q, want %q", got, want)

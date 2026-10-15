@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -16,6 +17,14 @@ type CheckPermissionOptions struct {
 	Models string
 	Key    string
 	Limit  int
+	JSON   bool
+}
+
+// Define response struct for check permission CLI.
+type CheckPermissionResponse struct {
+	Board         string `json:"board"`
+	Model         string `json:"model"`
+	HasPermission bool   `json:"has_permission"`
 }
 
 // parseCheckPermissionFlags parses and validates CLI arguments for check-permission.
@@ -32,6 +41,8 @@ func parseCheckPermissionFlags(args []string) (*CheckPermissionOptions, error) {
 	fs.IntVar(&opts.Limit, "limit", 1000, "Max number of models to return (optional)")
 	fs.StringVar(&opts.Key, "k", "", "Path to service account key file (optional)")
 	fs.StringVar(&opts.Key, "key", "", "Path to service account key file (optional)")
+
+	fs.BoolVar(&opts.JSON, "json", false, "Output in JSON format")
 
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "%s lab_cli check-permission -b <board>\n\n%s\n", Header("Usage:"), Header("Options:"))
@@ -62,11 +73,30 @@ func RunCheckPermission(args []string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultTimeout)
 	defer cancel()
-	_, err = service.New(ctx, opts.Key)
+
+	bs, err := service.New(ctx, opts.Key)
 	if err != nil {
 		return fmt.Errorf("failed to initialize build service: %w", err)
 	}
 
-	//TODO: check model permissions
+	permission, err := bs.CheckPermission(ctx, opts.Board, opts.Models, opts.Limit)
+	if err != nil {
+		return fmt.Errorf("failed to check permission: %w", err)
+	}
+
+	if opts.JSON {
+		res := CheckPermissionResponse{
+			Board:         opts.Board,
+			Model:         opts.Models,
+			HasPermission: permission,
+		}
+		return json.NewEncoder(os.Stdout).Encode(res)
+	}
+
+	if permission {
+		fmt.Fprintln(os.Stdout, "True")
+	} else {
+		fmt.Fprintln(os.Stdout, "False")
+	}
 	return nil
 }
