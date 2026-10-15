@@ -1,0 +1,37 @@
+# Binaries and build artifacts
+bin/
+lab_cli
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test and coverage artifacts
+*.out
+*.test
+coverage.txt
+coverage.html
+
+# Environment variables and sensitive credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*service_account*.json
+*credentials*.json
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE and Editor files
+.idea/
+*.sublime-project
+*.sublime-workspace
