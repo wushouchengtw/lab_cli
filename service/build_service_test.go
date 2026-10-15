@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"lab_cli/models"
 	"lab_cli/service"
 
 	moblabapipb "google.golang.org/genproto/googleapis/chromeos/moblab/v1beta1"
@@ -143,7 +144,7 @@ func TestBuildServiceImpl_ListModels(t *testing.T) {
 func TestBuildServiceImpl_CheckPermission(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("returns true when model exists in list", func(t *testing.T) {
+	t.Run("returns correct permissions for multiple models", func(t *testing.T) {
 		fakeModels := []*moblabapipb.Model{
 			{Name: "buildTargets/volteer/models/model-a"},
 			{Name: "buildTargets/volteer/models/model-b"},
@@ -153,13 +154,17 @@ func TestBuildServiceImpl_CheckPermission(t *testing.T) {
 		}
 
 		svc := service.NewWithClient(mockClient)
-		hasPermission, err := svc.CheckPermission(ctx, "volteer", "model-b", 100)
+		results, err := svc.CheckPermission(ctx, "volteer", []string{"model-b", "nonexistent-model"}, 100)
 
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !hasPermission {
-			t.Errorf("expected permission to be true, got false")
+		expected := []models.CheckPermissionResponse{
+			{Board: "volteer", Model: "model-b", HasPermission: true},
+			{Board: "volteer", Model: "nonexistent-model", HasPermission: false},
+		}
+		if !reflect.DeepEqual(results, expected) {
+			t.Errorf("results = %+v, want %+v", results, expected)
 		}
 		if mockClient.capturedParent != "buildTargets/volteer" {
 			t.Errorf("capturedParent = %q, want %q", mockClient.capturedParent, "buildTargets/volteer")
@@ -178,13 +183,16 @@ func TestBuildServiceImpl_CheckPermission(t *testing.T) {
 		}
 
 		svc := service.NewWithClient(mockClient)
-		hasPermission, err := svc.CheckPermission(ctx, "volteer", "nonexistent-model", 100)
+		results, err := svc.CheckPermission(ctx, "volteer", []string{"nonexistent-model"}, 100)
 
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if hasPermission {
-			t.Errorf("expected permission to be false, got true")
+		expected := []models.CheckPermissionResponse{
+			{Board: "volteer", Model: "nonexistent-model", HasPermission: false},
+		}
+		if !reflect.DeepEqual(results, expected) {
+			t.Errorf("results = %+v, want %+v", results, expected)
 		}
 	})
 
@@ -194,13 +202,13 @@ func TestBuildServiceImpl_CheckPermission(t *testing.T) {
 		}
 
 		svc := service.NewWithClient(mockClient)
-		hasPermission, err := svc.CheckPermission(ctx, "volteer", "model-a", 100)
+		results, err := svc.CheckPermission(ctx, "volteer", []string{"model-a"}, 100)
 
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if hasPermission {
-			t.Errorf("expected permission to be false, got true")
+		if len(results) != 1 || results[0].HasPermission {
+			t.Errorf("expected permission to be false, got %+v", results)
 		}
 	})
 
@@ -211,7 +219,7 @@ func TestBuildServiceImpl_CheckPermission(t *testing.T) {
 		}
 
 		svc := service.NewWithClient(mockClient)
-		hasPermission, err := svc.CheckPermission(ctx, "volteer", "model-a", 100)
+		results, err := svc.CheckPermission(ctx, "volteer", []string{"model-a"}, 100)
 
 		if err == nil {
 			t.Fatal("expected error, got nil")
@@ -219,8 +227,8 @@ func TestBuildServiceImpl_CheckPermission(t *testing.T) {
 		if !errors.Is(err, expectedErr) {
 			t.Errorf("error = %v, want %v", err, expectedErr)
 		}
-		if hasPermission {
-			t.Errorf("expected permission to be false on error, got true")
+		if results != nil {
+			t.Errorf("expected results to be nil on error, got %+v", results)
 		}
 	})
 }

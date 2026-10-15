@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"lab_cli/models"
 	"log/slog"
 	"path"
 )
@@ -33,18 +34,27 @@ func (b *BuildServiceImpl) ListModels(ctx context.Context, board string, pageSiz
 	return res, nil
 }
 
-func (s *BuildServiceImpl) CheckPermission(ctx context.Context, board string, model string, limit int) (bool, error) {
-	models, err := s.ListModels(ctx, board, limit)
+func (s *BuildServiceImpl) CheckPermission(ctx context.Context, board string, modelsOnCheck []string, limit int) ([]models.CheckPermissionResponse, error) {
+	modelsWithPermission, err := s.ListModels(ctx, board, limit)
 	if err != nil {
-		return false, fmt.Errorf("failed to list models for board %q: %w", board, err)
+		return nil, fmt.Errorf("failed to list models for board %q: %w", board, err)
 	}
 
-	slog.Debug("fetched models successfully", "board", board, "count", len(models), "models", models)
+	slog.Debug("fetched models successfully", "board", board, "count", len(modelsWithPermission), "models", modelsWithPermission)
 
-	for _, m := range models {
-		if model == GetModelName(m) {
-			return true, nil
-		}
+	result := []models.CheckPermissionResponse{}
+	modelsPermissionMap := make(map[string]bool)
+	for _, model := range modelsWithPermission {
+		modelsPermissionMap[GetModelName(model)] = true
 	}
-	return false, nil
+
+	// Check permission for each model in modelsOnCheck.
+	for _, model := range modelsOnCheck {
+		result = append(result, models.CheckPermissionResponse{
+			Board:         board,
+			Model:         model,
+			HasPermission: modelsPermissionMap[model],
+		})
+	}
+	return result, nil
 }

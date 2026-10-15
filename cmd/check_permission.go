@@ -6,9 +6,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
-
 	"lab_cli/service"
+	"os"
+	"strings"
 )
 
 // CheckPermissionOptions contains the flags for the check-permission command.
@@ -18,13 +18,6 @@ type CheckPermissionOptions struct {
 	Key    string
 	Limit  int
 	JSON   bool
-}
-
-// Define response struct for check permission CLI.
-type CheckPermissionResponse struct {
-	Board         string `json:"board"`
-	Model         string `json:"model"`
-	HasPermission bool   `json:"has_permission"`
 }
 
 // parseCheckPermissionFlags parses and validates CLI arguments for check-permission.
@@ -79,24 +72,26 @@ func RunCheckPermission(args []string) error {
 		return fmt.Errorf("failed to initialize build service: %w", err)
 	}
 
-	permission, err := bs.CheckPermission(ctx, opts.Board, opts.Models, opts.Limit)
+	models := strings.Split(opts.Models, ",")
+	for i, model := range models {
+		models[i] = strings.TrimSpace(model)
+	}
+
+	modelsWithPermission, err := bs.CheckPermission(ctx, opts.Board, models, opts.Limit)
 	if err != nil {
 		return fmt.Errorf("failed to check permission: %w", err)
 	}
 
 	if opts.JSON {
-		res := CheckPermissionResponse{
-			Board:         opts.Board,
-			Model:         opts.Models,
-			HasPermission: permission,
-		}
-		return json.NewEncoder(os.Stdout).Encode(res)
+		return json.NewEncoder(os.Stdout).Encode(modelsWithPermission)
 	}
 
-	if permission {
-		fmt.Fprintln(os.Stdout, "True")
-	} else {
-		fmt.Fprintln(os.Stdout, "False")
+	for _, model := range modelsWithPermission {
+		status := "False"
+		if model.HasPermission {
+			status = "True"
+		}
+		fmt.Fprintf(os.Stdout, "%s: %s\n", model.Model, status)
 	}
 	return nil
 }
