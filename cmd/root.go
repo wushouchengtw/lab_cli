@@ -47,6 +47,8 @@ func Execute(args []string) error {
 		return RunListModels(subArgs)
 	case "check-permission":
 		return RunCheckPermission(subArgs)
+	case "build":
+		return RunBuild(subArgs)
 	case "-h", "--help", "help":
 		PrintUsage()
 		return nil
@@ -64,17 +66,14 @@ func Header(text string) string {
 
 // PrintUsage prints the CLI help message.
 func PrintUsage() {
-	fmt.Printf(`%s
-  lab_cli <command> [options]
-
-%s
-  list-models        List all models for a given board
-  check-permission   Check access permission for a given board
-
-%s
-  -v, --verbose      Enable verbose/debug logging
-  -h, --help         Show help message
-
-Use "lab_cli <command> -h" for more information about a command.
-`, Header("Usage:"), Header("Available Commands:"), Header("Global Options:"))
+	NewHelpBuilder().
+		SetUsage("lab_cli <command> [options]").
+		AddCommand("list-models", "List all models for a given board").
+		AddCommand("check-permission", "Check access permission for a given board").
+		AddCommand("build", "Inspect or manage LUCI builds").
+		SetOptionsTitle("Global Options:").
+		AddOption("-v, --verbose", "Enable verbose/debug logging").
+		AddOption("-h, --help", "Show help message").
+		SetHint("Use \"lab_cli <command> -h\" for more information about a command.").
+		Print()
 }

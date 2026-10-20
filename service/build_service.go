@@ -45,7 +45,7 @@ func New(ctx context.Context, serviceAccountPath ...string) (*BuildServiceImpl, 
 	if path == "" {
 		return nil, fmt.Errorf("service account path is not set")
 	}
-	client, err := moblabapi.NewBuildClient(ctx, option.WithCredentialsFile(path))
+	client, err := moblabapi.NewBuildClient(ctx, option.WithAuthCredentialsFile(option.ServiceAccount, path))
 	if err != nil {
 		return nil, err
 	}
