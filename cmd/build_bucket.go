@@ -9,9 +9,11 @@ import (
 	"lab_cli/cmd/helper"
 	"lab_cli/service"
 	"lab_cli/site"
+	"log/slog"
 	"os"
 
 	buildbucketpb "go.chromium.org/luci/buildbucket/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Builder struct {
@@ -27,15 +29,26 @@ type Time struct {
 }
 
 type GetBuildResponse struct {
-	Id         int64   `json:"id"`
-	Builder    Builder `json:"builder"`
-	CreatedBy  string  `json:"created_by"`
-	CreateTime Time    `json:"create_time"`
-	StartTime  Time    `json:"start_time"`
-	EndTime    Time    `json:"end_time"`
-	UpdateTime Time    `json:"update_time"`
-	Status     string  `json:"status"`
-	Input      string  `json:"input"`
+	Id         int64    `json:"id"`
+	Builder    Builder  `json:"builder"`
+	CreatedBy  string   `json:"created_by"`
+	CreateTime *Time    `json:"create_time"`
+	StartTime  *Time    `json:"start_time"`
+	EndTime    *Time    `json:"end_time"`
+	UpdateTime *Time    `json:"update_time"`
+	Status     string   `json:"status"`
+	Input      string   `json:"input"`
+}
+
+func toTime(ts *timestamppb.Timestamp) *Time {
+	if ts == nil {
+		return nil
+	}
+	return &Time{
+		Seconds:    ts.Seconds,
+		Nanos:      ts.Nanos,
+		TaipeiTime: helper.UnixToTaipeiTime(ts.Seconds, ts.Nanos),
+	}
 }
 
 func RunBuild(args []string) error {
@@ -124,41 +137,38 @@ func RunBuildGet(args []string) error {
 	request := &buildbucketpb.GetBuildRequest{
 		Id: opts.ID,
 	}
+
 	b, err := buildBucketClient.GetBuild(ctx, request)
 	if err != nil {
 		return fmt.Errorf("failed to get build: %w", err)
 	}
 
-	res := GetBuildResponse{
-		Id: opts.ID,
-		Builder: Builder{
+	slog.Debug("GetBuildResponse: ", "Build", b)
+
+	var builder Builder
+	if b.Builder != nil {
+		builder = Builder{
 			Project: b.Builder.Project,
 			Bucket:  b.Builder.Bucket,
 			Builder: b.Builder.Builder,
-		},
-		CreatedBy: b.CreatedBy,
-		CreateTime: Time{
-			Seconds:    b.CreateTime.Seconds,
-			Nanos:      b.CreateTime.Nanos,
-			TaipeiTime: helper.UnixToTaipeiTime(b.CreateTime.Seconds, b.CreateTime.Nanos),
-		},
-		StartTime: Time{
-			Seconds:    b.StartTime.Seconds,
-			Nanos:      b.StartTime.Nanos,
-			TaipeiTime: helper.UnixToTaipeiTime(b.StartTime.Seconds, b.StartTime.Nanos),
-		},
-		EndTime: Time{
-			Seconds:    b.EndTime.Seconds,
-			Nanos:      b.EndTime.Nanos,
-			TaipeiTime: helper.UnixToTaipeiTime(b.EndTime.Seconds, b.EndTime.Nanos),
-		},
-		UpdateTime: Time{
-			Seconds:    b.UpdateTime.Seconds,
-			Nanos:      b.UpdateTime.Nanos,
-			TaipeiTime: helper.UnixToTaipeiTime(b.UpdateTime.Seconds, b.UpdateTime.Nanos),
-		},
-		Status: helper.ToBuildStatus(b.Status),
-		Input:  b.Input.String(),
+		}
+	}
+
+	var inputStr string
+	if b.Input != nil {
+		inputStr = b.Input.String()
+	}
+
+	res := GetBuildResponse{
+		Id:         opts.ID,
+		Builder:    builder,
+		CreatedBy:  b.CreatedBy,
+		CreateTime: toTime(b.CreateTime),
+		StartTime:  toTime(b.StartTime),
+		EndTime:    toTime(b.EndTime),
+		UpdateTime: toTime(b.UpdateTime),
+		Status:     helper.ToBuildStatus(b.Status),
+		Input:      inputStr,
 	}
 
 	enc := json.NewEncoder(os.Stdout)
@@ -167,7 +177,9 @@ func RunBuildGet(args []string) error {
 }
 
 type BuildCancelOptions struct {
-	ID int64
+	ID     int64
+	Reason string
+	Key    string
 }
 
 func parseBuildCancelFlags(args []string) (*BuildCancelOptions, error) {
@@ -175,6 +187,8 @@ func parseBuildCancelFlags(args []string) (*BuildCancelOptions, error) {
 	opts := &BuildCancelOptions{}
 
 	fs.Int64Var(&opts.ID, "id", 0, "Build ID (required)")
+	fs.StringVar(&opts.Reason, "reason", "", "Reason for cancelling the build (required)")
+	fs.StringVar(&opts.Key, "key", "", "Path to the service account JSON file (optional)")
 
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "%s lab_cli build cancel --id <ID> [options]\n\n%s\n", Header("Usage:"), Header("Options:"))
@@ -190,6 +204,10 @@ func parseBuildCancelFlags(args []string) (*BuildCancelOptions, error) {
 		return nil, fmt.Errorf("flag --id is required")
 	}
 
+	if opts.Reason == "" {
+		fs.Usage()
+		return nil, fmt.Errorf("flag --reason is required")
+	}
 	return opts, nil
 }
 
@@ -201,7 +219,30 @@ func RunBuildCancel(args []string) error {
 		}
 		return err
 	}
-	// TODO:
-	_ = opts
+
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultTimeout)
+	defer cancel()
+
+	path := site.GetServiceAccountPath(opts.Key)
+	if path == "" {
+		return fmt.Errorf("cannot get service account")
+	}
+
+	buildBucketClient, err := service.NewBuildBucketClient(ctx, path)
+	if err != nil {
+		return fmt.Errorf("failed to create buildbucket client: %w", err)
+	}
+
+	request := &buildbucketpb.CancelBuildRequest{
+		Id:              opts.ID,
+		SummaryMarkdown: opts.Reason,
+	}
+
+	b, err := buildBucketClient.CancelBuild(ctx, request)
+	if err != nil {
+		return fmt.Errorf("failed to cancel build: %w", err)
+	}
+
+	fmt.Printf("Build %d cancelled successfully: %v\n", opts.ID, b)
 	return nil
 }

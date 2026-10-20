@@ -4,6 +4,8 @@ import (
 	"errors"
 	"flag"
 	"testing"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func TestParseBuildGetFlags(t *testing.T) {
@@ -58,7 +60,7 @@ func TestParseBuildGetFlags(t *testing.T) {
 
 func TestParseBuildCancelFlags(t *testing.T) {
 	t.Run("successfully parses valid required flags", func(t *testing.T) {
-		args := []string{"-id", "99999"}
+		args := []string{"-id", "99999", "-reason", "cleanup build"}
 		opts, err := parseBuildCancelFlags(args)
 
 		if err != nil {
@@ -67,14 +69,41 @@ func TestParseBuildCancelFlags(t *testing.T) {
 		if opts.ID != 99999 {
 			t.Errorf("opts.ID = %d, want 99999", opts.ID)
 		}
+		if opts.Reason != "cleanup build" {
+			t.Errorf("opts.Reason = %q, want %q", opts.Reason, "cleanup build")
+		}
+		if opts.Key != "" {
+			t.Errorf("opts.Key = %q, want empty", opts.Key)
+		}
+	})
+
+	t.Run("successfully parses all optional flags", func(t *testing.T) {
+		args := []string{"--id", "99999", "--reason", "cleanup build", "--key", "/path/to/key.json"}
+		opts, err := parseBuildCancelFlags(args)
+
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if opts.Key != "/path/to/key.json" {
+			t.Errorf("opts.Key = %q, want %q", opts.Key, "/path/to/key.json")
+		}
 	})
 
 	t.Run("returns error when id flag is missing", func(t *testing.T) {
-		args := []string{}
+		args := []string{"-reason", "cleanup"}
 		_, err := parseBuildCancelFlags(args)
 
 		if err == nil {
 			t.Fatal("expected error when id flag is missing, got nil")
+		}
+	})
+
+	t.Run("returns error when reason flag is missing", func(t *testing.T) {
+		args := []string{"-id", "99999"}
+		_, err := parseBuildCancelFlags(args)
+
+		if err == nil {
+			t.Fatal("expected error when reason flag is missing, got nil")
 		}
 	})
 
@@ -129,9 +158,30 @@ func TestRunBuild(t *testing.T) {
 		}
 	})
 
-	t.Run("handles cancel execution with valid flags", func(t *testing.T) {
-		if err := RunBuild([]string{"cancel", "--id", "123"}); err != nil {
-			t.Errorf("RunBuild(cancel --id 123) returned unexpected error: %v", err)
+	t.Run("returns error on cancel when required flags missing", func(t *testing.T) {
+		if err := RunBuild([]string{"cancel", "--id", "123"}); err == nil {
+			t.Fatal("expected error for missing --reason flag, got nil")
+		}
+	})
+}
+
+func TestToTime(t *testing.T) {
+	t.Run("returns nil when proto timestamp is nil", func(t *testing.T) {
+		if got := toTime(nil); got != nil {
+			t.Errorf("toTime(nil) = %v, want nil", got)
+		}
+	})
+
+	t.Run("returns valid Time when proto timestamp is provided", func(t *testing.T) {
+		got := toTime(&timestamppb.Timestamp{
+			Seconds: 0,
+			Nanos:   0,
+		})
+		if got == nil {
+			t.Fatal("expected non-nil Time, got nil")
+		}
+		if got.Seconds != 0 || got.TaipeiTime != "1970-01-01 08:00:00" {
+			t.Errorf("unexpected Time result: %+v", got)
 		}
 	})
 }
