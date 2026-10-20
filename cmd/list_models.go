@@ -81,7 +81,7 @@ func RunListModels(args []string) error {
 	slog.Debug("Found model(s) for board", "Board", opts.Board, "Count", len(models))
 	for _, m := range models {
 		modelName := path.Base(m)
-		slog.Debug("Model", "ModelName", modelName)
+		fmt.Fprintf(os.Stdout, "%s\n", modelName)
 	}
 
 	return nil
