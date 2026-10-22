@@ -9,7 +9,6 @@ import (
 	"lab_cli/cmd/helper"
 	"lab_cli/service"
 	"lab_cli/site"
-	"log/slog"
 	"os"
 
 	buildbucketpb "go.chromium.org/luci/buildbucket/proto"
@@ -29,15 +28,15 @@ type Time struct {
 }
 
 type GetBuildResponse struct {
-	Id         int64    `json:"id"`
-	Builder    Builder  `json:"builder"`
-	CreatedBy  string   `json:"created_by"`
-	CreateTime *Time    `json:"create_time"`
-	StartTime  *Time    `json:"start_time"`
-	EndTime    *Time    `json:"end_time"`
-	UpdateTime *Time    `json:"update_time"`
-	Status     string   `json:"status"`
-	Input      string   `json:"input"`
+	Id         int64          `json:"id"`
+	Builder    Builder        `json:"builder"`
+	CreatedBy  string         `json:"created_by"`
+	CreateTime *Time          `json:"create_time"`
+	StartTime  *Time          `json:"start_time"`
+	EndTime    *Time          `json:"end_time"`
+	UpdateTime *Time          `json:"update_time"`
+	Status     string         `json:"status"`
+	Input      map[string]any `json:"input,omitempty"`
 }
 
 func toTime(ts *timestamppb.Timestamp) *Time {
@@ -136,14 +135,15 @@ func RunBuildGet(args []string) error {
 
 	request := &buildbucketpb.GetBuildRequest{
 		Id: opts.ID,
+		Mask: &buildbucketpb.BuildMask{
+			AllFields: true,
+		},
 	}
 
 	b, err := buildBucketClient.GetBuild(ctx, request)
 	if err != nil {
 		return fmt.Errorf("failed to get build: %w", err)
 	}
-
-	slog.Debug("GetBuildResponse: ", "Build", b)
 
 	var builder Builder
 	if b.Builder != nil {
@@ -154,9 +154,9 @@ func RunBuildGet(args []string) error {
 		}
 	}
 
-	var inputStr string
-	if b.Input != nil {
-		inputStr = b.Input.String()
+	var inputMap map[string]any
+	if b.GetInput().GetProperties() != nil {
+		inputMap = b.GetInput().GetProperties().AsMap()
 	}
 
 	res := GetBuildResponse{
@@ -168,8 +168,10 @@ func RunBuildGet(args []string) error {
 		EndTime:    toTime(b.EndTime),
 		UpdateTime: toTime(b.UpdateTime),
 		Status:     helper.ToBuildStatus(b.Status),
-		Input:      inputStr,
+		Input:      inputMap,
 	}
+
+	// For example, `res.Input["$chromeos/bad_builds"]` to check if the build is a bad build.
 
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "\t")
