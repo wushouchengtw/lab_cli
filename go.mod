@@ -7,6 +7,7 @@ require (
 	go.chromium.org/luci v0.0.0-20261014170840-67d60266ffa6
 	google.golang.org/api v0.304.0
 	google.golang.org/genproto v0.0.0-20261012220534-4341edf3f941
+	google.golang.org/protobuf v1.36.12
 )
 
 require (
@@ -45,5 +46,4 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20261012220534-4341edf3f941 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261012220534-4341edf3f941 // indirect
 	google.golang.org/grpc v1.84.0 // indirect
-	google.golang.org/protobuf v1.36.12 // indirect
 )
